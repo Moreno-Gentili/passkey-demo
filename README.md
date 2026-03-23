@@ -6,6 +6,8 @@ Come **backend**, usa ASP.NET Code Identity per la gestione degli utenti. I dati
 
 Come **frontend**, usa un singolo file `index.html` che si trova nella directory `wwwroot`. Il file usa del semplice JavaScript. Non sono state usate né librerie né framework client-side.
 
+> ASP.NET Core Identity v10 è la prima versione a supportare l'accesso con passkey.
+
 ## Provare la demo
 
 Assicurati di aver installato [.NET SDK v10](https://get.dot.net/). Poi segui questi passi:
