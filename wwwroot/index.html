@@ -1,0 +1,263 @@
+<html>
+<head>
+    <title>Passkey demo</title>
+    <!-- Aggiungo bootstrap per farla sembrare una demo decente -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <style>
+        html { background-color: #EFEFEF; }
+        body { max-width: 800px; margin: auto; background-color: #FFFFFF; padding: 2rem; }
+        td { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+    <h1>Passkey demo</h1>
+
+    <!-- Step 1: Login -->
+    <section id="step1">
+        <h2>Login</h2>
+
+        <form onsubmit="loginWithCredentials(this.email.value, this.password.value); return false;">
+            <label class="form-label mt-2">Email (usa <code>user@domain.ext</code>)</label>
+            <input type="email" class="form-control" name="email" />
+            <label class="form-label mt-2">Password (usa <code>Password1!</code>)</label>
+            <input type="password" class="form-control" name="password" />
+            <button type="submit" class="btn btn-primary mt-2">Login</button>
+        </form>
+
+        <p>-- oppure --</p>
+
+        <button type="submit" class="btn btn-primary" onclick="loginWithPasskey()">Accedi con Passkey</button>
+    </section>
+
+    <!-- Step 2: Aggiungi passkey, poi fai il logout e di nuovo login con la passkey -->
+    <section id="step2" hidden>
+        <h2>Benvenuto <span id="username"></span>, gestisci le tue passkey</h2>
+
+        <table class="table mt-2 table-striped">
+            <tbody id="passkey-list">
+            </tbody>
+        </table>
+
+        <div>
+            <button type="button" class="btn btn-primary mt-2" onclick="addPasskey()">Aggiungi nuova passkey</button>
+        </div>
+
+        <div>
+            <button type="button" class="btn btn-secondary mt-4" onclick="logout()">Logout</button>
+        </div>
+    </section>
+
+    <script>
+        async function loginWithCredentials(email, password) {
+            try {
+                const { userName } = await sendPost('/login-with-credentials', { email, password });
+                renderUserName(userName);
+                await listPasskeys();
+                showStep(2);
+            } catch (err) {
+                alert(err);
+            }
+        }
+
+        async function loginWithPasskey() {
+            try {
+                const passkeyRequestOptions = await sendGet('/passkeys/request-options');
+                console.log('REQUEST OPTIONS', JSON.stringify(passkeyRequestOptions));
+                passkeyRequestOptions.challenge = toBuffer(passkeyRequestOptions.challenge);
+                const assertion = await navigator.credentials.get({
+                    publicKey: passkeyRequestOptions
+                });
+
+                const payload = JSON.stringify({
+                    id: assertion.id,
+                    rawId: toBase64(assertion.rawId),
+                    type: assertion.type,
+                    response: {
+                        authenticatorData: toBase64(assertion.response.authenticatorData),
+                        clientDataJSON: toBase64(assertion.response.clientDataJSON),
+                        signature: toBase64(assertion.response.signature),
+                        userHandle: assertion.response.userHandle
+                            ? toBase64(assertion.response.userHandle)
+                            : null
+                    },
+                    clientExtensionResults: assertion.getClientExtensionResults()
+                });
+
+                console.log('LOGIN CREDENTIALS', payload);
+                const { userName } = await sendPost('/login-with-passkey', { jsonCredential: payload });
+                renderUserName(userName);
+                await listPasskeys();
+                showStep(2);
+            } catch (err) {
+                console.error(err);
+                alert(err);
+            }
+        }
+
+
+        async function listPasskeys() {
+            try {
+                const passkeyList = await sendGet('/passkeys');
+                renderPasskeyList(passkeyList);
+            } catch (err) {
+                alert(err);
+            }
+        }
+
+        async function addPasskey() {
+            try {
+                const passkeyCreationOptions = await sendGet('/passkeys/creation-options');
+                console.log('CREATION OPTIONS', JSON.stringify(passkeyCreationOptions));
+                passkeyCreationOptions.challenge = toBuffer(passkeyCreationOptions.challenge);
+                passkeyCreationOptions.user.id = toBuffer(passkeyCreationOptions.user.id);
+                if (passkeyCreationOptions.excludeCredentials?.length) {
+                    for (const exclude of passkeyCreationOptions.excludeCredentials) {
+                        exclude.id = toBuffer(exclude.id);
+                    }
+                }
+                const credential = await navigator.credentials.create({
+                    publicKey: passkeyCreationOptions
+                });
+
+                if (credential) {
+                    const passkeyName = prompt('Dai un nome a questa passkey');
+                    if (passkeyName) {
+                        const payload = JSON.stringify(credential);
+                        console.log('CREATE CREDENTIALS', payload);
+                        await sendPost('/passkeys', { passkeyName, jsonCredential: payload });
+                        await listPasskeys();
+                    } else {
+                        alert('Operazione annullata');
+                    }
+                }
+            } catch (err) {
+                alert(err);
+            }
+        }
+
+        async function deletePasskey(id) {
+            if (!confirm('Sei sicuro di voler eliminare la passkey?')) {
+                return;
+            }
+
+            try {
+                await sendDelete(`/passkeys`, { passkeyId: id });
+                await listPasskeys();
+            } catch (err) {
+                alert(err);
+            }
+        }
+
+        async function logout() {
+            await sendPost('/logout', {});
+            showStep(1);
+        }
+
+        async function sendGet(path) {
+            const response = await fetch(path, {
+                method: 'get',
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw Error(response.statusText);
+            }
+
+            const text = await response.text();
+            if (text) {
+                return JSON.parse(text);
+            }
+        }
+
+        async function sendPost(path, payload) {
+            const response = await fetch(path, {
+                method: 'post',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw Error(response.statusText);
+            }
+
+            const text = await response.text();
+            if (text) {
+                return JSON.parse(text);
+            }
+        }
+
+
+        async function sendDelete(path, payload) {
+            const response = await fetch(path, {
+                method: 'delete',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw Error(response.statusText);
+            }
+
+            const text = await response.text();
+            if (text) {
+                return JSON.parse(text);
+            }
+        }
+
+        function showStep(step) {
+            document.querySelector('#step1').hidden = step !== 1;
+            document.querySelector('#step2').hidden = step !== 2;
+        }
+
+        function toBuffer(base64String) {
+            const decodedChallenge = atob(base64String.replace(/\-/g, '+').replace(/_/g, '/'));
+            return Uint8Array.from(decodedChallenge, c => c.charCodeAt(0));
+        }
+
+        function toBase64(buffer) {
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+                   .replace(/\+/g, "-")
+                   .replace(/\//g, "_")
+                   .replace(/=/g, "");
+        }
+
+        function renderUserName(userName) {
+            document.querySelector('#username').textContent = userName;
+        }
+
+        function renderPasskeyList(passkeyList) {
+            const list = document.querySelector('#passkey-list');
+            list.innerHTML = '';
+
+            if (passkeyList.length) {
+                for (const passkey of passkeyList) {
+                    const itemRow = document.createElement('tr');
+                    const itemCell = document.createElement('td');
+                    const nameElement = document.createElement('span');
+                    const buttonElement = document.createElement('button');
+
+                    nameElement.innerText = passkey.name;
+                    buttonElement.textContent = 'Elimina';
+                    buttonElement.classList.add('btn', 'btn-danger');
+                    buttonElement.addEventListener('click', deletePasskey.bind(this, passkey.id), false);
+
+                    itemRow.appendChild(itemCell);
+                    itemCell.appendChild(nameElement);
+                    itemCell.appendChild(buttonElement);
+                    list.appendChild(itemRow);
+                }
+            } else {
+                const itemRow = document.createElement('tr');
+                const itemCell = document.createElement('td');
+                itemCell.innerText = 'Al momento non ci sono passkey';
+                itemRow.appendChild(itemCell);
+                list.appendChild(itemRow);
+            }
+        }
+    </script>
+
+</body>
+</html>
