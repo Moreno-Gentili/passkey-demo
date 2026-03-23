@@ -8,6 +8,8 @@ Come **frontend**, usa un singolo file `index.html` che si trova nella directory
 
 > ASP.NET Core Identity v10 è la prima versione a supportare l'accesso con passkey.
 
+![passkey.gif](passkey.gif)
+
 ## Provare la demo
 
 Assicurati di aver installato [.NET SDK v10](https://get.dot.net/). Poi segui questi passi:
