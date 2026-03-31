@@ -51,8 +51,8 @@
     <script>
         async function loginWithCredentials(email, password) {
             try {
-                const { userName } = await sendPost('/login-with-credentials', { email, password });
-                renderUserName(userName);
+                const { username } = await sendPost('/login-with-credentials', { email, password });
+                renderUserName(username);
                 await listPasskeys();
                 showStep(2);
             } catch (err) {
@@ -85,8 +85,8 @@
                 });
 
                 console.log('LOGIN CREDENTIALS', payload);
-                const { userName } = await sendPost('/login-with-passkey', { jsonCredential: payload });
-                renderUserName(userName);
+                const { username } = await sendPost('/login-with-passkey', { jsonCredential: payload });
+                renderUserName(username);
                 await listPasskeys();
                 showStep(2);
             } catch (err) {
