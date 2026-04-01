@@ -107,7 +107,13 @@
 
         async function addPasskey() {
             try {
-                const passkeyCreationOptions = await sendGet('/passkeys/creation-options');
+                const passkeyName = prompt('Dai un nome a questa passkey');
+                if (!passkeyName) {
+                    alert('Operazione annullata');
+                    return;
+                }
+
+                const passkeyCreationOptions = await sendPost('/passkeys/creation-options', { name: passkeyName });
                 console.log('CREATION OPTIONS', JSON.stringify(passkeyCreationOptions));
                 passkeyCreationOptions.challenge = toBuffer(passkeyCreationOptions.challenge);
                 passkeyCreationOptions.user.id = toBuffer(passkeyCreationOptions.user.id);
@@ -116,12 +122,13 @@
                         exclude.id = toBuffer(exclude.id);
                     }
                 }
+
+
                 const credential = await navigator.credentials.create({
                     publicKey: passkeyCreationOptions
                 });
 
                 if (credential) {
-                    const passkeyName = prompt('Dai un nome a questa passkey');
                     if (passkeyName) {
                         const payload = JSON.stringify(credential);
                         console.log('CREATE CREDENTIALS', payload);

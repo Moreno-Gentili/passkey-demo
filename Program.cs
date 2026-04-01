@@ -10,7 +10,7 @@ WebApplication app = CreateAndConfigureWebAppWithIdentity(args); // Configurazio
 // Qui inizia la parte interessante: gli endpoint per login e gestione delle passkey
 
 app.MapPost("/login-with-credentials", LoginWithCredentials).AllowAnonymous();
-app.MapGet("/passkeys/creation-options", GetPasskeyCreationOptionsForLoggedInUser).RequireAuthorization();
+app.MapPost("/passkeys/creation-options", GetPasskeyCreationOptionsForLoggedInUser).RequireAuthorization();
 app.MapGet("/passkeys", GetPasskeysForLoggedInUser).RequireAuthorization();
 app.MapPost("/passkeys", CreatePasskeyForLoggedInUser).RequireAuthorization();
 app.MapDelete("/passkeys", DeletePasskeyForLoggedInUser).RequireAuthorization();
@@ -126,6 +126,7 @@ async Task<Results<NoContent, BadRequest, InternalServerError>> DeletePasskeyFor
 // Tali opzioni contengono: una challenge, una chiave pubblica, gli algoritmi disponibili e l'id e il nome dell'utente. Nel readme c'è un esempio.
 async Task<IResult> GetPasskeyCreationOptionsForLoggedInUser(
     HttpContext httpContext,
+    [FromBody] GetCreationOptionsCommand command,
     [FromServices] UserManager<ApplicationUser> userManager,
     [FromServices] SignInManager<ApplicationUser> signInManager)
 {
@@ -138,8 +139,8 @@ async Task<IResult> GetPasskeyCreationOptionsForLoggedInUser(
     PasskeyUserEntity userEntity = new()
     {
         Id = user.Id,
-        DisplayName = username,
-        Name = username
+        DisplayName = $"{username} ({command.Name})",
+        Name = $"{username} ({command.Name})"
     };
 
     string jsonOptions = await signInManager.MakePasskeyCreationOptionsAsync(userEntity);
@@ -221,6 +222,7 @@ static WebApplication CreateAndConfigureWebAppWithIdentity(string[] args)
 public record LoginWithCredentialsCommand(string Email, string Password);
 public record LoginWithPasskeyCommand(string JsonCredential);
 public record LoginResult(string? Username);
+public record GetCreationOptionsCommand(string Name);
 public record CreatePasskeyCommand(string PasskeyName, string JsonCredential);
 public record DeletePasskeyCommand(string PasskeyId);
 public record PasskeyDescriptor(string Id, string? Name);
